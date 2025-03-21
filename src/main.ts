@@ -6,16 +6,6 @@ let activePortInfo: HTMLHeadingElement | null;
 let ledToggleCheckbox: HTMLInputElement | null;
 let selectedPort: SerialPort | null;
 
-// async function greet() {
-//   console.log("Available ports:", 
-//   if (greetMsgEl && greetInputEl) {
-//     // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-//     greetMsgEl.textContent = await invoke("greet", {
-//       name: greetInputEl.value,
-//     });
-//   }
-// }
-
 async function findUSBPorts() {
   const ports = await SerialPort.available_ports();
   return Object.entries(ports).filter(([_, port]) => port.type === 'USB');
@@ -28,6 +18,7 @@ function removeAllOptions(selectElement: HTMLSelectElement) {
 }
 
 async function refreshPortsComboBox() {
+  selectPort(null);
   if(portsComboBox)
     removeAllOptions(portsComboBox);
   const availablePorts = await findUSBPorts();
@@ -51,21 +42,31 @@ async function handleSelectPort() {
 
 async function selectPort(key: string | null) {
   if (key) {
+    if (selectedPort)
+      await selectedPort.close();
     if (activePortInfo)
       activePortInfo.textContent = "Активный порт: " + key;
     selectedPort = new SerialPort({
       path: key,
-      baudRate: 9600
+      baudRate: 9600,
+      timeout: 100,
     })
-    await selectedPort.open();;
-    selectedPort.disconnected(() => {
+    await selectedPort.open();
+    await selectedPort.disconnected(() => {
+      console.log("disconnected")
       selectPort(null);
     });
+    console.log("setup listener")
     if (ledToggleCheckbox)
       ledToggleCheckbox.disabled = false;
   } else {
+    selectedPort?.write('0');
     if (activePortInfo)
       activePortInfo.textContent = "Активный порт: не указан";
+    if (ledToggleCheckbox) {
+      ledToggleCheckbox.disabled = true;
+      ledToggleCheckbox.checked = false;
+    }
     selectedPort = null;
   }
 }
@@ -73,10 +74,14 @@ async function selectPort(key: string | null) {
 function handleLedToggle() {
   if (!selectedPort)
     return;
-  if (ledToggleCheckbox?.checked)
-    selectedPort.write('1');
-  else
-    selectedPort.write('0');
+  try {
+    if (ledToggleCheckbox?.checked)
+      selectedPort.write('1');
+    else
+      selectedPort.write('0');
+  } catch (err) {
+    selectPort(null);
+  }
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
