@@ -1,4 +1,5 @@
 import { SerialPort } from "tauri-plugin-serialplugin";
+import { message } from '@tauri-apps/plugin-dialog';
 
 let portsComboBox: HTMLSelectElement | null;
 let refreshButton: HTMLButtonElement | null;
@@ -51,7 +52,13 @@ async function selectPort(key: string | null) {
       baudRate: 9600,
       timeout: 100,
     })
-    await selectedPort.open();
+    try {
+      await selectedPort.open();
+    } catch (err) {
+      selectPort(null);
+      await message('Не удалось подключиться к порту, возможно он используется другой программой', { title: 'Ошибка!', kind: 'error' });
+      return;
+    }
     await selectedPort.disconnected(() => {
       console.log("disconnected")
       selectPort(null);
@@ -63,6 +70,8 @@ async function selectPort(key: string | null) {
     selectedPort?.write('0');
     if (activePortInfo)
       activePortInfo.textContent = "Активный порт: не указан";
+    if (portsComboBox)
+      portsComboBox.selectedIndex = -1;
     if (ledToggleCheckbox) {
       ledToggleCheckbox.disabled = true;
       ledToggleCheckbox.checked = false;
